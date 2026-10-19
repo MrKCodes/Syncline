@@ -1,0 +1,41 @@
+{
+  "_comment": "Syncline config — one per repo you want to mirror to a GitHub Project. Copy this to e.g. configs/subby.config.json and fill in. All *_file paths are resolved RELATIVE TO THIS CONFIG FILE's directory (or pass absolute paths). State/cache files are written next to wherever you point them — keep them out of version control if your plan dir is gitignored.",
+
+  "project_name": "Subby",
+  "repo_owner": "OpsAlchemist",
+  "owner_type": "org",
+  "repo_name": "subby",
+
+  "_status_map": "Maps each RAW plan status (left) to the exact board Status option NAME (right). The board must already have these options (case-insensitive match). Add rows for every status your plan uses.",
+  "status_map": {
+    "done": "Done",
+    "review": "In review",
+    "in-progress": "In progress",
+    "in_progress": "In progress",
+    "ready-for-dev": "Ready",
+    "ready": "Ready",
+    "backlog": "Backlog"
+  },
+
+  "_done_statuses": "Which RAW statuses mean the issue should be CLOSED (and which make an epic roll up to done). Usually just done.",
+  "done_statuses": ["done"],
+
+  "_type_field_name": "Custom single-select field tagging each item Epic/Story. NOTE: 'Type' is a RESERVED Projects v2 field name and cannot be created — use 'Work Type' (the default). The importer creates it if absent.",
+  "type_field_name": "Work Type",
+
+  "_files": "Where the plan + Syncline's own bookkeeping live. For a BMAD layout these sit under _bmad-output/implementation-artifacts (gitignored). plan_file is the sprint status the sync reads; epics_file + story_spec_glob feed the manifest builder; manifest_file/state_file/cache_file are Syncline's artifacts.",
+  "plan_file": "../../subby/_bmad-output/implementation-artifacts/sprint-status.yaml",
+  "epics_file": "../../subby/_bmad-output/planning-artifacts/epics.md",
+  "story_spec_glob": "../../subby/_bmad-output/implementation-artifacts/spec-*.md",
+  "manifest_file": "./state/subby.manifest.json",
+  "state_file": "./state/subby.import-state.json",
+  "cache_file": "./state/subby.sync-cache.json",
+
+  "label": "subby",
+
+  "_regexes": "Plan line patterns. Defaults match a BMAD sprint-status.yaml: two-space-indented 'epic-N: status' and 'N-M-slug: status'. Override only if your plan format differs. For the SYNC: epic_line_regex/story_line_regex capture group(1)=key, group(2)=status. For the MANIFEST builder the groups differ (it needs the numbers) — see syncline_build_manifest defaults; override there via the same keys if needed.",
+  "epic_line_regex": "^\\s{2}(epic-\\d+):\\s*(\\S+)",
+  "story_line_regex": "^\\s{2}(\\d+-\\d+-[a-z0-9-]+):\\s*(\\S+)",
+  "story_key_regex": "^\\d+-\\d+-",
+  "epic_num_from_story_regex": "^(\\d+)-"
+}

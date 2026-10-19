@@ -1,0 +1,14 @@
+# Syncline bookkeeping — per-repo manifest / import-state / sync-cache.
+# Local-only: these are generated and specific to each machine's board state.
+configs/state/
+*.import-state.json
+*.sync-cache.json
+*.manifest.json
+
+# Personal, non-template configs (keep configs/example.config.json tracked).
+configs/*.config.json
+!configs/example.config.json
+
+__pycache__/
+*.pyc
+.DS_Store
