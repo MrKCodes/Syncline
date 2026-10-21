@@ -7,3 +7,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-bmad-adapter-emits-a-conforming-v1-manifest.md`
   summary: configs/example.config.json's `_done_statuses` comment still says it makes "an epic roll up to done" — a behavior Story 1.1 abolished (no computed rollup).
   evidence: Config is explicitly out of scope for Story 1.1 (spec Boundaries). Story 1.2 (pin and document the config schema) should reconcile the comment and note the `manifest_epic_regex`/`manifest_story_regex` override keys the builder now reads.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-0-disposable-scratch-board-manual-verification-checklist.md`
+  summary: docs/USAGE.md still describes pre-migration behavior — "issues matched by exact title" and the removed epic rollup ("an epic is done only if every story is terminal").
+  evidence: Correcting these to match-by-key / direct-status-read while the import/sync code still has the old behavior would make the docs MORE wrong, not less. They should be updated as part of the Epic 2 import stories (2.1/2.3 land match-by-key) and the Story 4.3 honest-limits docs pass. Real: USAGE.md:45-46 and :28-29.
