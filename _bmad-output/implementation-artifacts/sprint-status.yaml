@@ -1,0 +1,62 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 10-21-2026 04:40
+last_updated: 10-21-2026 04:48
+project: Syncline
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: in-progress
+  1-1-bmad-adapter-emits-a-conforming-v1-manifest: review
+  1-2-pin-and-document-the-config-schema: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-0-disposable-scratch-board-manual-verification-checklist: backlog
+  2-1-one-time-cutover-backfill-identity-markers-then-retire-title: backlog
+  2-2-pre-write-validation-whole-plan-dry-run: backlog
+  2-3-create-stamp-issues-matched-by-key: backlog
+  2-4-place-items-on-the-board-with-status-and-work-type: backlog
+  2-5-build-the-sub-issue-hierarchy-from-parent-pointers-in-order: backlog
+  2-6-reconcile-open-closed-state-from-status: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-incremental-reconcile-of-changed-items: backlog
+  3-2-safe-stop-hook-entry-point: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-init-scaffolds-a-ready-to-edit-config: backlog
+  4-2-package-as-an-installable-claude-code-plugin: backlog
+  4-3-honest-limits-documentation: backlog
+  epic-4-retrospective: optional
