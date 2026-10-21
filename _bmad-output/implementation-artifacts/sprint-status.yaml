@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 10-21-2026 04:40
-last_updated: 10-21-2026 04:48
+last_updated: 10-22-2026 01:55
 project: Syncline
 project_key: NOKEY
 tracking_system: file-system
@@ -37,7 +37,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
   1-1-bmad-adapter-emits-a-conforming-v1-manifest: review
-  1-2-pin-and-document-the-config-schema: backlog
+  1-2-pin-and-document-the-config-schema: review
   epic-1-retrospective: optional
 
   epic-2: backlog

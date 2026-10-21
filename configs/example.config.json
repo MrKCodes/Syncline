@@ -1,12 +1,21 @@
 {
-  "_comment": "Syncline config — one per repo you want to mirror to a GitHub Project. Copy this to e.g. configs/subby.config.json and fill in. All *_file paths are resolved RELATIVE TO THIS CONFIG FILE's directory (or pass absolute paths). State/cache files are written next to wherever you point them — keep them out of version control if your plan dir is gitignored.",
+  "_comment": "Syncline config — one per repo you want to mirror to a GitHub Project (v2). Copy this to e.g. configs/<yourproject>.config.json and fill it in. This file is the AUTHORITATIVE schema: it documents EVERY field the adapter (syncline_build_manifest.py) and the engine (syncline_import.py, syncline_sync.py) read. Each real field is preceded by a `_<field>` comment key (standard JSON has no comments). Nothing about your repo/owner/project is hard-coded in the scripts — all of it is config-driven and lives here.",
 
+  "_paths_note": "All *_file paths below resolve RELATIVE TO THIS CONFIG FILE's own directory; pass an absolute path to override. State/manifest/cache files are engine-owned bookkeeping — keep them out of version control (they are local-only and do not travel to teammates/CI).",
+
+  "_project_name": "The GitHub Project (v2) board title to mirror onto, matched case-insensitively. Required. No default.",
   "project_name": "Subby",
+
+  "_repo_owner": "The owner (user or org login) of both the repo and the project. Required. No default.",
   "repo_owner": "OpsAlchemist",
+
+  "_owner_type": "Whether repo_owner is an 'org' or a 'user' — selects the GraphQL root used to resolve the project. Matched exactly: only the literal 'org' selects the organization root; any other value (including 'organization' or 'User') falls through to the user root. Default: 'org'.",
   "owner_type": "org",
+
+  "_repo_name": "The repository that issues are created in. Required. No default.",
   "repo_name": "subby",
 
-  "_status_map": "Maps each RAW plan status (left) to the exact board Status option NAME (right). The board must already have these options (case-insensitive match). Add rows for every status your plan uses.",
+  "_status_map": "Maps each RAW plan status (left) to the exact board Status option NAME (right). The board must already have these options (matched case-insensitively). Add a row for every status your plan uses: the adapter fails validation on a plan status missing here, while the sync silently skips an unmapped status rather than erroring. Required. No default.",
   "status_map": {
     "done": "Done",
     "review": "In review",
@@ -17,25 +26,40 @@
     "backlog": "Backlog"
   },
 
-  "_done_statuses": "Which RAW statuses mean the issue should be CLOSED (and which make an epic roll up to done). Usually just done.",
+  "_done_statuses": "Which RAW statuses are terminal: an item with one of these is CLOSED on the board (a non-terminal status reopens it). Default: [\"done\"].",
   "done_statuses": ["done"],
 
-  "_type_field_name": "Custom single-select field tagging each item Epic/Story. NOTE: 'Type' is a RESERVED Projects v2 field name and cannot be created — use 'Work Type' (the default). The importer creates it if absent.",
+  "_type_field_name": "Custom single-select field tagging each item by its Work Type (Epic/Story). NOTE: 'Type' is a RESERVED Projects v2 field name and cannot be created — use 'Work Type'. The importer creates this field if absent (except under --dry-run); the sync never creates it and only sets it when the field already exists. Default: 'Work Type'.",
   "type_field_name": "Work Type",
 
-  "_files": "Where the plan + Syncline's own bookkeeping live. For a BMAD layout these sit under _bmad-output/implementation-artifacts (gitignored). plan_file is the sprint status the sync reads; epics_file + story_spec_glob feed the manifest builder; manifest_file/state_file/cache_file are Syncline's artifacts.",
+  "_files": "Where the plan and Syncline's own bookkeeping live. For a BMAD layout these sit under _bmad-output (gitignored). plan_file is the sprint status the sync reads for per-item status; epics_file (+ optional story_spec_glob) feed the manifest builder with titles; manifest_file/state_file/cache_file are Syncline's own artifacts.",
+
+  "_plan_file": "The plan the sync reads for per-item status (a BMAD sprint-status.yaml). Resolved relative to this config's dir. Read by the adapter and the sync.",
   "plan_file": "../../subby/_bmad-output/implementation-artifacts/sprint-status.yaml",
+
+  "_epics_file": "The plan source the adapter reads epic/story TITLES from (a BMAD epics.md). Resolved relative to this config's dir. Read by the adapter only.",
   "epics_file": "../../subby/_bmad-output/planning-artifacts/epics.md",
+
+  "_story_spec_glob": "OPTIONAL glob of story spec files whose frontmatter `title:` gives nicer story titles than the slug. Omit to fall back to a readable title derived from the story key. Read by the adapter only.",
   "story_spec_glob": "../../subby/_bmad-output/implementation-artifacts/spec-*.md",
+
+  "_manifest_file": "The manifest the adapter WRITES and the engine READS — Syncline's one on-disk contract. Required by the importer (it exits if the manifest is unreadable); optional for the sync (used only to title brand-new items it creates). Resolved relative to this config's dir.",
   "manifest_file": "./state/subby.manifest.json",
+
+  "_state_file": "Engine-owned import bookkeeping (per-item issue/project ids) that makes import idempotent + resumable. Local-only; do not commit.",
   "state_file": "./state/subby.import-state.json",
+
+  "_cache_file": "Engine-owned sync cache (plan sha256 + resolved board ids + last-seen statuses) that makes an unchanged plan a no-op. Local-only; do not commit.",
   "cache_file": "./state/subby.sync-cache.json",
 
+  "_label": "Short tag printed in the sync's one-line 'project synced' message so you can tell which board changed. Default: project_name.",
   "label": "subby",
 
-  "_regexes": "Plan line patterns. Defaults match a BMAD sprint-status.yaml: two-space-indented 'epic-N: status' and 'N-M-slug: status'. Override only if your plan format differs. For the SYNC: epic_line_regex/story_line_regex capture group(1)=key, group(2)=status. For the MANIFEST builder the groups differ (it needs the numbers) — see syncline_build_manifest defaults; override there via the same keys if needed.",
+  "_regexes": "ADVANCED. Line patterns for parsing the plan; override only if your plan format differs from a BMAD sprint-status.yaml. Two independent sets with DIFFERENT capture groups: (1) the SYNC reads epic_line_regex/story_line_regex where group(1)=key, group(2)=status; story_key_regex and epic_num_from_story_regex classify a key and extract its epic number. (2) the ADAPTER reads manifest_epic_regex (groups: 1=key, 2=epicNum, 3=status) and manifest_story_regex (groups: 1=key, 2=epicNum, 3=storyNum, 4=status) — it needs the NUMBERS, so these are kept separate from the sync patterns. Each has a built-in default; set a key here only to override it.",
   "epic_line_regex": "^\\s{2}(epic-\\d+):\\s*(\\S+)",
   "story_line_regex": "^\\s{2}(\\d+-\\d+-[a-z0-9-]+):\\s*(\\S+)",
   "story_key_regex": "^\\d+-\\d+-",
-  "epic_num_from_story_regex": "^(\\d+)-"
+  "epic_num_from_story_regex": "^(\\d+)-",
+  "manifest_epic_regex": "^\\s{2}(epic-(\\d+)):\\s*(\\S+)",
+  "manifest_story_regex": "^\\s{2}((\\d+)-(\\d+)-[a-z0-9-]+):\\s*(\\S+)"
 }
