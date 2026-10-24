@@ -217,6 +217,12 @@ def main():
             o=owner, n=repo_name,
         )["repository"]["id"]
         manifest = load(manifest_path, {"stories": [], "epics": []}) if manifest_path else {"stories": [], "epics": []}
+        # AC4 AUDIT (Story 2.1): sync NEVER matched items by issue title — it
+        # reconciles by STATE-FILE KEY (see reconcile() above: state["epics"]/
+        # state["stories"] keys drive plan.get(key) and rec["issue"]). The only
+        # title use is here — stitle/etitle name BRAND-NEW items when sync first
+        # creates them (display, not identity) — so there was no title-based
+        # identity matcher in sync to retire. Retained as display naming.
         stitle = {s["key"]: s["title"] for s in manifest.get("stories", [])}
         etitle = {e["epic"]: e["title"] for e in manifest.get("epics", [])}
 

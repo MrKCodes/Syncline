@@ -9,8 +9,14 @@ single-select Status, and a custom single-select "Work Type" (Epic/Story) field.
 Config-driven: nothing here is hard-coded to a particular repo. Point it at a
 config JSON (see configs/example.config.json) describing the repo, the project,
 the status map, and where the plan + manifest live. Progress is recorded in the
-config's `state_file` so a re-run resumes and never duplicates (issues are matched
-by exact title).
+config's `state_file` so a re-run resumes and never duplicates.
+
+Identity is the canonical `<!-- syncline-id: KEY -->` body marker (AD-3/AD-4,
+bin/syncline_markers.py) — the ONE identity mechanism. The old title-based
+identity matcher was retired in Story 2.1; its sole surviving use is the one-shot
+title bootstrap inside bin/syncline_cutover.py. The marker-based stamp-on-create
+and match-by-key resolution land in Story 2.3; until then the write path below is
+guarded (see main()) so it fails loud rather than silently duplicating.
 
 Requires `gh` authed with the `project` scope (`gh auth login -s project`).
 
@@ -22,7 +28,6 @@ import argparse
 import json
 import os
 import subprocess
-import sys
 
 
 def gh(*args, check=True):
@@ -95,29 +100,16 @@ def main():
     repo_name = cfg["repo_name"]
     project_name = cfg["project_name"]
     status_map = cfg["status_map"]            # raw plan status -> board option name
-    done_statuses = set(cfg.get("done_statuses", ["done"]))  # which raw statuses close the issue
     type_field_name = cfg.get("type_field_name", "Work Type")
     manifest_path = rel(cfg["manifest_file"])
-    state_path = rel(cfg["state_file"])
 
     manifest = load_json(manifest_path, None)
     if manifest is None:
         raise SystemExit(f"Could not read manifest: {manifest_path}")
 
-    state = load_json(state_path, {"epics": {}, "stories": {}})
-
-    def save_state():
-        with open(state_path, "w") as fh:
-            json.dump(state, fh, indent=2)
-
     proj = resolve_project(owner, owner_type, project_name)
     project_id = proj["id"]
     print(f"Project: {proj['title']} (#{proj['number']}) under {owner_type} {owner}")
-
-    repo_id = graphql(
-        "query($o:String!,$n:String!){ repository(owner:$o,name:$n){ id } }",
-        o=owner, n=repo_name,
-    )["repository"]["id"]
 
     def read_fields():
         nodes = graphql(
@@ -151,126 +143,40 @@ def main():
         type_field = fields.get(type_field_name)
     type_opt = {o["name"].lower(): o["id"] for o in type_field["options"]} if type_field else {}
 
-    def mapped(status):
-        name = status_map.get(status)
-        if not name:
-            raise SystemExit(f"Status {status!r} is not in the config status_map.")
-        opt = status_opt.get(name.lower())
-        if not opt:
-            raise SystemExit(f"Board has no Status option {name!r} (needed for raw {status!r}).")
-        return opt
-
-    print("\n--- PLAN ---")
-    for e in manifest["epics"]:
-        print(f"  EPIC  {e['title']}  -> {status_map.get(e['status'], e['status'])}")
-    print(f"  + {len(manifest['stories'])} stories as sub-issues")
     if args.dry_run:
-        print("\n[dry-run] no writes performed.")
+        # Dry-run still resolves the project + Status options + Work Type field
+        # above (useful for config validation); it performs no writes. Printing a
+        # full per-item plan from the new items[] manifest lands in Story 2.2.
+        print("\n[dry-run] project + fields resolved; no writes performed.")
         return
 
-    # Existing issues (title -> node) for idempotency.
-    existing = {}
-    after = None
-    while True:
-        page = graphql(
-            "query($o:String!,$n:String!,$after:String){ repository(owner:$o,name:$n){"
-            " issues(first:100, after:$after, states:[OPEN,CLOSED]){ pageInfo{ hasNextPage endCursor }"
-            " nodes{ id number title state } } } }",
-            o=owner, n=repo_name, **({"after": after} if after else {}),
-        )["repository"]["issues"]
-        for n in page["nodes"]:
-            existing[n["title"].strip()] = n
-        if not page["pageInfo"]["hasNextPage"]:
-            break
-        after = page["pageInfo"]["endCursor"]
-    print(f"Existing repo issues scanned: {len(existing)}")
-
-    def ensure_issue(title, body):
-        if title in existing:
-            n = existing[title]
-            return {"id": n["id"], "number": n["number"]}
-        d = graphql(
-            "mutation($r:ID!,$t:String!,$b:String!){ createIssue(input:{repositoryId:$r,title:$t,body:$b}){"
-            " issue{ id number } } }",
-            r=repo_id, t=title, b=body,
-        )["createIssue"]["issue"]
-        existing[title] = {"id": d["id"], "number": d["number"], "title": title, "state": "OPEN"}
-        print(f"  + issue #{d['number']}  {title}")
-        return d
-
-    def add_to_project(content_id):
-        return graphql(
-            "mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }",
-            p=project_id, c=content_id,
-        )["addProjectV2ItemById"]["item"]["id"]
-
-    def set_single_select(item_id, field_id, option_id):
-        graphql(
-            "mutation($p:ID!,$i:ID!,$f:ID!,$o:String!){ updateProjectV2ItemFieldValue(input:{"
-            " projectId:$p,itemId:$i,fieldId:$f,value:{singleSelectOptionId:$o}}){ projectV2Item{ id } } }",
-            p=project_id, i=item_id, f=field_id, o=option_id,
-        )
-
-    def link_sub_issue(parent_id, child_id):
-        q = "mutation($p:ID!,$c:ID!){ addSubIssue(input:{issueId:$p, subIssueId:$c}){ subIssue{ number } } }"
-        try:
-            graphql(q, p=parent_id, c=child_id)
-        except RuntimeError as e:
-            if "already" in str(e).lower():
-                return
-            graphql(q, feature="sub_issues", p=parent_id, c=child_id)  # preview-header fallback
-
-    def close_issue(issue_id):
-        graphql("mutation($i:ID!){ closeIssue(input:{issueId:$i}){ issue{ number } } }", i=issue_id)
-
-    # Phase 1: epics.
-    epic_issue = {}
-    for e in manifest["epics"]:
-        body = (
-            f"**Plan epic** ({e.get('story_count', '?')} stories).\n\n"
-            f"Rollup status: **{status_map.get(e['status'], e['status'])}**.\n\n"
-            f"_Imported by Syncline from the plan._"
-        )
-        iss = ensure_issue(e["title"], body)
-        epic_issue[e["epic"]] = iss
-        item = add_to_project(iss["id"])
-        set_single_select(item, status_field["id"], mapped(e["status"]))
-        if type_opt.get("epic"):
-            set_single_select(item, type_field["id"], type_opt["epic"])
-        state["epics"][str(e["epic"])] = {"issue": iss["number"], "item": item}
-        save_state()
-
-    # Phase 2: stories (create -> project -> status/type -> sub-issue link).
-    for s in manifest["stories"]:
-        body = (
-            f"Story **{s['story']}** of Epic **{s['epic']}**.  Key: `{s['key']}`.\n\n"
-            f"Status: **{status_map.get(s['status'], s['status'])}**.\n\n"
-            f"_Imported by Syncline from the plan._"
-        )
-        iss = ensure_issue(s["title"], body)
-        item = add_to_project(iss["id"])
-        set_single_select(item, status_field["id"], mapped(s["status"]))
-        if type_opt.get("story"):
-            set_single_select(item, type_field["id"], type_opt["story"])
-        parent = epic_issue.get(s["epic"])
-        if parent:
-            link_sub_issue(parent["id"], iss["id"])
-        state["stories"][s["key"]] = {"issue": iss["number"], "item": item, "epic": s["epic"]}
-        save_state()
-
-    # Phase 3: close issues whose status is terminal (keeps the tracker tidy).
-    for e in manifest["epics"]:
-        if e["status"] in done_statuses:
-            close_issue(epic_issue[e["epic"]]["id"])
-    for s in manifest["stories"]:
-        if s["status"] in done_statuses:
-            close_issue(existing[s["title"]]["id"])
-
-    print(
-        f"\nDone. {len(epic_issue)} epics + {len(manifest['stories'])} stories on the board; "
-        f"stories linked as sub-issues; terminal items closed."
+    # --- WRITE PATH GUARD (Story 2.1): title-based identity is retired. ---
+    #
+    # The old write path matched existing issues BY TITLE (an `existing` dict
+    # keyed on `title.strip()`) to stay idempotent. That title identity matcher
+    # has been removed here as part of "one matcher, one funeral" (AC4, AD-4):
+    # the ONE identity mechanism is now the canonical `<!-- syncline-id: KEY -->`
+    # body marker (bin/syncline_markers.py). The old title-matcher's only
+    # surviving use is the ONE-SHOT bootstrap inside bin/syncline_cutover.py,
+    # which backfills that marker onto already-imported issues.
+    #
+    # Rewiring import to (a) consume the new items[] manifest shape, (b) stamp
+    # the marker on create (FR5), and (c) resolve existing issues by marker/key
+    # (FR6) is Story 2.3. Until that lands, running the real import would create
+    # issues with NO identity marker and NO way to match existing ones — i.e. it
+    # would silently DUPLICATE every issue. So we fail loud instead of silent.
+    #
+    # (Import has been non-runnable end-to-end since Story 1.1 anyway: the adapter
+    # now emits items[] and no longer emits the manifest["epics"]/["stories"]
+    # shape this file's old write path consumed. This guard makes that honest.)
+    raise SystemExit(
+        "syncline_import real import is disabled pending Story 2.3 "
+        "(marker-based stamp-on-create + match-by-key over the new items[] manifest). "
+        "The title-based identity matcher was retired in Story 2.1; running import now "
+        "would create unmarked, unmatchable duplicate issues. "
+        "To backfill identity markers onto an already-imported board, run "
+        "bin/syncline_cutover.py. Use --dry-run here to resolve/validate the board only."
     )
-    save_state()
 
 
 if __name__ == "__main__":
